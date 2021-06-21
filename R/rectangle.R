@@ -203,7 +203,6 @@ unnest_longer <- function(data, col,
                           ptype = list(),
                           transform = list()
                           ) {
-
   check_present(col)
   col <- tidyselect::vars_pull(names(data), !!enquo(col))
 
@@ -212,6 +211,10 @@ unnest_longer <- function(data, col,
     indices_include <- indices_include %||% TRUE
   } else {
     indices_to <- paste0(col, "_id")
+  }
+
+  if (!is.null(indices_include) && !is_bool(indices_include)) {
+    abort("`indices_include` must be `NULL`, `TRUE`, or `FALSE`.")
   }
 
   data[[col]] <- map(
@@ -374,7 +377,7 @@ simplify_col <- function(x, nm, ptype = list(), transform = list(), simplify = F
 
   # Don't simplify lists of lists, because that typically indicates that
   # there might be multiple values.
-  is_list <- map_lgl(x, is.list)
+  is_list <- vapply(x, is.list, logical(1L))
   if (any(is_list)) {
     if (is.null(ptype)) {
       return(x)
@@ -384,7 +387,7 @@ simplify_col <- function(x, nm, ptype = list(), transform = list(), simplify = F
   }
 
   # Don't try and simplify non-vectors
-  is_vec <- map_lgl(x, ~ vec_is(.x) || is.null(.x))
+  is_vec <- vapply(x, function(.x) vec_is(.x) || is.null(.x), logical(1L))
   if (any(!is_vec)) {
     if (is.null(ptype)) {
       return(x)
@@ -393,8 +396,15 @@ simplify_col <- function(x, nm, ptype = list(), transform = list(), simplify = F
     }
   }
 
-  n <- map_int(x, vec_size)
-  if (!all(n %in% c(0, 1))) {
+  if (vec_is_list(x)) {
+    n <- list_sizes(x)
+  } else if (is.data.frame(x)) {
+    n <- rep(vec_size(x), nrow(x))
+  } else {
+    n <- vec_size(x)
+  }
+
+  if (any(n > 1)) {
     if (is.null(ptype)) {
       return(x)
     } else {
@@ -426,15 +436,15 @@ vec_to_wide <- function(x, col, names_sep = NULL) {
   }
 
   if (is.data.frame(x)) {
-    as_tibble(map(x, list))
+    new_data_frame(lapply(x, list))
   } else if (vec_is(x)) {
     if (is.list(x)) {
-      x <- purrr::compact(x)
-      x <- map(x, list)
+      x <- tidyr_compact(x)
+      x <- lapply(x, list)
     } else {
       x <- as.list(x)
     }
-    as_tibble(x, .name_repair = "unique", .rows = 1L)
+    data_frame(!!!x, .name_repair = "unique", .size = 1L)
   } else {
     stop("Input must be list of vectors", call. = FALSE)
   }
@@ -445,18 +455,19 @@ vec_to_long <- function(x, col, values_to, indices_to, indices_include = NULL) {
   if (is.null(x)) {
     NULL
   } else if (is.data.frame(x)) {
-    tibble(!!col := x)
+    new_data_frame(list2(!!col := x))
   } else if (vec_is(x)) {
-
     indices_include <- indices_include %||% !is.null(names(x))
 
-    if (isTRUE(indices_include)) {
-      tibble(
-        !!values_to := x,
-        !!indices_to := index(x)
+    if (indices_include) {
+      new_data_frame(
+        list2(
+          !!values_to := x,
+          !!indices_to := index(x)
+        )
       )
     } else {
-      tibble(!!values_to := x)
+      new_data_frame(list2(!!values_to := x))
     }
   } else {
     stop("Input must be list of vectors", call. = FALSE)
@@ -465,4 +476,13 @@ vec_to_long <- function(x, col, values_to, indices_to, indices_include = NULL) {
 
 index <- function(x) {
   names(x) %||% seq_along(x)
+}
+
+# `purrr::compact()` is too slow in a tight loop because
+# * it always calls `as_mapper()`
+# * applies `is_empty()` to every element
+# might become a proper vctrs function
+# https://github.com/r-lib/vctrs/issues/1395
+tidyr_compact <- function(x) {
+  vec_slice(x, list_sizes(x) != 0)
 }
