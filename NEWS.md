@@ -1,5 +1,11 @@
 # tidyr (development version)
 
+* `replace_na()` has been updated to use vctrs. This is a breaking change, as
+  `data` can no longer be promoted to the type of `replace`. The returned value
+  now always has the same type as `data`. Note that `replace_na()` is generally
+  considered to be superseded in favor of `dplyr::across()` +
+  `dplyr::coalesce()`.
+
 # tidyr 1.1.3
 
 * tidyr verbs no longer have "default" methods for lazyeval fallbacks. This
