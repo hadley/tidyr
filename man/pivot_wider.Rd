@@ -16,6 +16,7 @@ pivot_wider(
   values_from = value,
   values_fill = NULL,
   values_fn = NULL,
+  others_fn = NULL,
   ...
 )
 }
@@ -70,6 +71,13 @@ in the output. You will typically use this when the combination of
 This can be a named list if you want to apply different aggregations
 to different value columns.}
 
+\item{others_fn}{By default columns not used in \code{id_cols}, \code{names_from}, and
+\code{values_from} are dropped. Optionally, you can specify a function to
+aggregate these columns.
+
+This can be a named list if you want to apply different aggregations
+to different columns.}
+
 \item{...}{Additional arguments passed on to methods.}
 }
 \description{
@@ -123,6 +131,17 @@ warpbreaks \%>\%
     names_from = wool,
     values_from = breaks,
     values_fn = mean
+  )
+
+# Can aggregate other columns with `others_fn`
+warpbreaks$n <- 1:54
+warpbreaks \%>\%
+  pivot_wider(
+    id_cols = tension,
+    names_from = wool,
+    values_from = breaks,
+    values_fn = mean,
+    others_fn = list(n = sum)
   )
 }
 \seealso{

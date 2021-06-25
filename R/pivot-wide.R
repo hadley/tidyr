@@ -50,6 +50,12 @@
 #'
 #'   This can be a named list if you want to apply different aggregations
 #'   to different value columns.
+#' @param others_fn By default columns not used in `id_cols`, `names_from`, and
+#'   `values_from` are dropped. Optionally, you can specify a function to
+#'   aggregate these columns.
+#'
+#'   This can be a named list if you want to apply different aggregations
+#'   to different columns.
 #' @param ... Additional arguments passed on to methods.
 #' @export
 #' @examples
@@ -91,6 +97,17 @@
 #'     values_from = breaks,
 #'     values_fn = mean
 #'   )
+#'
+#' # Can aggregate other columns with `others_fn`
+#' warpbreaks$n <- 1:54
+#' warpbreaks %>%
+#'   pivot_wider(
+#'     id_cols = tension,
+#'     names_from = wool,
+#'     values_from = breaks,
+#'     values_fn = mean,
+#'     others_fn = list(n = sum)
+#'   )
 pivot_wider <- function(data,
                         id_cols = NULL,
                         names_from = name,
@@ -102,6 +119,7 @@ pivot_wider <- function(data,
                         values_from = value,
                         values_fill = NULL,
                         values_fn = NULL,
+                        others_fn = NULL,
                         ...) {
   ellipsis::check_dots_used()
   UseMethod("pivot_wider")
@@ -119,6 +137,7 @@ pivot_wider.data.frame <- function(data,
                                    values_from = value,
                                    values_fill = NULL,
                                    values_fn = NULL,
+                                   others_fn = NULL,
                                    ...
                                    ) {
   names_from <- enquo(names_from)
@@ -136,7 +155,8 @@ pivot_wider.data.frame <- function(data,
   pivot_wider_spec(data, spec, !!id_cols,
     names_repair = names_repair,
     values_fill = values_fill,
-    values_fn = values_fn
+    values_fn = values_fn,
+    others_fn = others_fn
   )
 }
 
@@ -190,7 +210,8 @@ pivot_wider_spec <- function(data,
                                   names_repair = "check_unique",
                                   id_cols = NULL,
                                   values_fill = NULL,
-                                  values_fn = NULL) {
+                                  values_fn = NULL,
+                                  others_fn = NULL) {
   spec <- check_spec(spec)
 
   if (is.function(values_fn)) {
@@ -276,8 +297,28 @@ pivot_wider_spec <- function(data,
     out <- out[c(names(rows), spec$.name)]
   }
 
-  reconstruct_tibble(data, out)
+  if (!is_null(others_fn)) {
+    non_id_cols <- setdiff(colnames(data), c(key_vars, spec_cols))
 
+    if (is.list(others_fn)) {
+      non_id_cols <- intersect(non_id_cols, names(others_fn))
+    } else {
+      others_fn <- rep_named(non_id_cols, list(others_fn))
+    }
+
+    out_others <- map(
+      set_names(non_id_cols),
+      function(col) {
+        fn <- as_function(others_fn[[col]])
+        data_summarised <- map(vec_split(data[[col]], row_id)$val, fn)
+        vec_c(!!!data_summarised)
+      }
+    )
+
+    out <- vec_cbind(out, !!!out_others)
+  }
+
+  reconstruct_tibble(data, out)
 }
 
 #' @export

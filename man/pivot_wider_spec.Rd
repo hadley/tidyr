@@ -11,7 +11,8 @@ pivot_wider_spec(
   names_repair = "check_unique",
   id_cols = NULL,
   values_fill = NULL,
-  values_fn = NULL
+  values_fn = NULL,
+  others_fn = NULL
 )
 
 build_wider_spec(
@@ -62,6 +63,13 @@ in the output. You will typically use this when the combination of
 
 This can be a named list if you want to apply different aggregations
 to different value columns.}
+
+\item{others_fn}{By default columns not used in \code{id_cols}, \code{names_from}, and
+\code{values_from} are dropped. Optionally, you can specify a function to
+aggregate these columns.
+
+This can be a named list if you want to apply different aggregations
+to different columns.}
 
 \item{names_from}{<\code{\link[=tidyr_tidy_select]{tidy-select}}> A pair of
 arguments describing which column (or columns) to get the name of the
